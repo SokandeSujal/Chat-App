@@ -48,7 +48,8 @@ function connect() {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8080`;
+    // const wsUrl = `${protocol}//${window.location.hostname}:8080`;
+    const wsUrl = `${protocol}//192.168.1.105:8080`;
     
     try {
         ws = new WebSocket(wsUrl);
