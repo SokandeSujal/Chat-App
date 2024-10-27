@@ -1,126 +1,129 @@
-// script.js
+// Initialize WebSocket and state variables
 let ws;
 let username;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 3000;
 
-const messagesDiv = document.getElementById("messages");
-const messageInput = document.getElementById("messageInput");
-const sendButton = document.getElementById("sendButton");
-const disconnectButton = document.getElementById("disconnectButton");
-const connectionStatus = document.getElementById("connectionStatus");
+// Get DOM elements
+const messagesDiv = document.getElementById('messages');
+const connectionStatus = document.getElementById('connectionStatus');
+const inputWrapper = document.querySelector('.input-wrapper');
+const sendIcon = document.querySelector('.send-icon');
+
+// Create and append input field if it doesn't exist
+if (!inputWrapper.querySelector('input')) {
+    const messageInput = document.createElement('input');
+    messageInput.type = 'text';
+    messageInput.id = 'messageInput';
+    messageInput.placeholder = 'Type a message';
+    inputWrapper.appendChild(messageInput);
+} else {
+    // If input already exists, just ensure it has the correct ID
+    const existingInput = inputWrapper.querySelector('input');
+    existingInput.id = 'messageInput';
+}
+
+// Get the message input reference
+const messageInput = document.getElementById('messageInput');
 
 function updateConnectionStatus(status, message) {
     connectionStatus.textContent = message;
     connectionStatus.className = `connection-status ${status}`;
-    const isConnected = status === "connected";
-    messageInput.disabled = !isConnected;
-    sendButton.disabled = !isConnected;
-    disconnectButton.disabled = !isConnected;
+    messageInput.disabled = status === 'disconnected';
+    sendIcon.style.opacity = status === 'disconnected' ? '0.5' : '1';
+    sendIcon.style.cursor = status === 'disconnected' ? 'not-allowed' : 'pointer';
 }
 
 function connect() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        return;
-    }
+    if (ws && ws.readyState === WebSocket.OPEN) return;
 
-    updateConnectionStatus("connecting", "Connecting...");
+    updateConnectionStatus('connecting', 'Connecting...');
 
     if (!username) {
-        username = prompt("Please enter your username:");
-        if (!username || username.trim() === "") {
-            username = "Guest" + Math.floor(Math.random() * 1000);
+        username = prompt('Please enter your username:');
+        if (!username || username.trim() === '') {
+            username = 'Guest' + Math.floor(Math.random() * 1000);
         }
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.hostname}:8080`;
     
-    console.log("Connecting to:", wsUrl);
-    
     try {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log("WebSocket connection established");
-            updateConnectionStatus("connected", "Connected");
-            addMessage("Connected to chat server", "system");
+            console.log('Connected to chat server');
+            updateConnectionStatus('connected', 'Connected');
+            addMessage('Connected to chat server', 'system');
             reconnectAttempts = 0;
-            ws.send(username); // Send username immediately after connection
+            ws.send(username);
         };
 
-        ws.onclose = (event) => {
-            console.log("WebSocket closed:", event);
-            updateConnectionStatus("disconnected", "Disconnected");
-            addMessage("Disconnected from chat server", "system");
+        ws.onclose = () => {
+            console.log('Disconnected from server');
+            updateConnectionStatus('disconnected', 'Disconnected');
+            addMessage('Disconnected from chat server', 'system');
             
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                 setTimeout(() => {
                     reconnectAttempts++;
-                    console.log(`Reconnect attempt ${reconnectAttempts}...`);
+                    console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
                     connect();
                 }, RECONNECT_INTERVAL);
             }
         };
 
         ws.onerror = (error) => {
-            console.error("WebSocket error:", error);
-            addMessage("Connection error", "system");
+            console.error('WebSocket error:', error);
+            addMessage('Connection error occurred', 'system');
         };
 
         ws.onmessage = (event) => {
-            console.log("Received message:", event.data);
+            console.log('Received message:', event.data);
             try {
                 const data = JSON.parse(event.data);
-                const sender = data.sender;
-                const message = data.message;
-                
-                // Determine message type
-                let messageType;
-                if (sender === username) {
-                    messageType = "user";
-                } else if (sender === "Server") {
-                    messageType = "system";
-                } else {
-                    messageType = "other";
-                }
-                
-                // Format the message based on type
-                let displayMessage;
-                if (messageType === "system") {
-                    displayMessage = `${sender}: ${message}`;
-                } else {
-                    displayMessage = `${sender}: ${message}`;
-                }
-                
+                const messageType = determineMessageType(data.sender);
+                const displayMessage = formatMessage(data.sender, data.message, messageType);
                 addMessage(displayMessage, messageType);
             } catch (error) {
-                console.error("Error parsing message:", error);
-                addMessage(event.data, "system");
+                console.error('Error parsing message:', error);
+                addMessage(event.data, 'system');
             }
         };
     } catch (error) {
-        console.error("Connection error:", error);
-        updateConnectionStatus("disconnected", "Connection Error");
-        addMessage("Failed to connect to server", "system");
+        console.error('Connection error:', error);
+        updateConnectionStatus('disconnected', 'Connection Failed');
+        addMessage('Failed to connect to server', 'system');
     }
 }
 
+function determineMessageType(sender) {
+    if (sender === username) return 'user';
+    if (sender === 'Server') return 'system';
+    return 'other';
+}
+
+function formatMessage(sender, message, type) {
+    return type === 'system' ? `${message}` : `${sender}: ${message}`;
+}
+
 function addMessage(message, type) {
-    const messageDiv = document.createElement("div");
-    messageDiv.classList.add("message", `${type}-message`);
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
     
-    const timestamp = document.createElement("div");
-    timestamp.classList.add("timestamp");
-    timestamp.textContent = new Date().toLocaleTimeString();
-    
-    const content = document.createElement("div");
-    content.classList.add("message-content");
+    const content = document.createElement('div');
+    content.className = 'message-content';
     content.textContent = message;
     
-    messageDiv.appendChild(timestamp);
+    const timestamp = document.createElement('div');
+    timestamp.className = 'timestamp';
+    timestamp.textContent = new Date().toLocaleTimeString();
+    
     messageDiv.appendChild(content);
+    messageDiv.appendChild(timestamp);
+    
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
@@ -128,40 +131,27 @@ function addMessage(message, type) {
 function sendMessage() {
     const message = messageInput.value.trim();
     if (message && ws && ws.readyState === WebSocket.OPEN) {
-        console.log("Sending message:", message);
         ws.send(message);
-        messageInput.value = "";
-    }
-}
-
-function disconnect() {
-    if (ws) {
-        ws.close();
+        messageInput.value = '';
     }
 }
 
 // Event Listeners
-sendButton.addEventListener('click', sendMessage);
-disconnectButton.addEventListener('click', disconnect);
 messageInput.addEventListener('keypress', (e) => {
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
         sendMessage();
     }
 });
 
-// Add manual reconnect button
-const reconnectButton = document.createElement("button");
-reconnectButton.textContent = "Reconnect";
-reconnectButton.className = "reconnect-button";
-reconnectButton.addEventListener('click', () => {
-    reconnectAttempts = 0;
-    connect();
+sendIcon.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        sendMessage();
+    }
 });
-document.querySelector(".chat-input").appendChild(reconnectButton);
 
-// Handle page visibility
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
+// Handle visibility changes
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             reconnectAttempts = 0;
             connect();
@@ -169,5 +159,23 @@ document.addEventListener("visibilitychange", () => {
     }
 });
 
-// Initial connection
-connect();
+// Initialize emoji picker toggle if needed
+const emojiButton = document.querySelector('.icon:first-child');
+if (emojiButton) {
+    emojiButton.addEventListener('click', () => {
+        // Emoji picker functionality can be added here
+        console.log('Emoji picker clicked');
+    });
+}
+
+// Initialize attachment button if needed
+const attachmentButton = document.querySelector('.icon:nth-child(2)');
+if (attachmentButton) {
+    attachmentButton.addEventListener('click', () => {
+        // Attachment functionality can be added here
+        console.log('Attachment button clicked');
+    });
+}
+
+// Start the connection when the page loads
+window.addEventListener('load', connect);
